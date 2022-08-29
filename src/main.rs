@@ -1,5 +1,4 @@
 mod ymd;
-
 use crate::ymd::{count_days, print_days_diff, Ymd};
 
 fn main() {

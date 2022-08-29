@@ -23,7 +23,10 @@ impl fmt::Debug for YmdError {
             }
             YmdError::InvalidNumber(error) => match error {
                 ValidationError::MonthDoesNotExist => write!(f, "ValidationError: The given month does not exist."),
-                ValidationError::DayDoesNotExist(month) => write!(f, "ValidationError: The given day does not exist in the month of {:?}.", month),
+                ValidationError::DayDoesNotExist(month, year) => match month {
+                    Month::February => write!(f, "ValidationError: The given day does not exist in the month of {:?}, {}.", month, year.unwrap()),
+                    _ => write!(f, "ValidationError: The given day does not exist in the month of {:?}.", month)
+                },
             },
         }
     }
@@ -32,7 +35,7 @@ impl fmt::Debug for YmdError {
 #[derive(Debug)]
 enum ValidationError {
     MonthDoesNotExist,
-    DayDoesNotExist(Month),
+    DayDoesNotExist(Month, Option<i32>),
 }
 
 #[derive(Debug)]
@@ -61,7 +64,6 @@ impl Ymd {
 
     fn parse_input(&mut self, input: String) -> Result<(), YmdError> {
         let mut split = input.split('/');
-
         match (split.next(), split.next(), split.next()) {
             (Some(m), Some(d), Some(y)) => {
                 self.parse_year(y)?;
@@ -72,7 +74,7 @@ impl Ymd {
             (Some(m), Some(d), None) => {
                 self.parse_month(m)?;
                 self.parse_day(d)?;
-                self.handle_empty_year()?;
+                self.handle_missing_year()?;
                 Ok(())
             }
             _ => Err(YmdError::WrongFormat),
@@ -100,12 +102,17 @@ impl Ymd {
 
     fn validate_day(&self) -> Result<(), YmdError> {
         match (self.month, self.day, is_leap_year(self.year)) {
-            (1 | 3 | 5 | 7 | 8 | 10 | 12, 1..=31, _) => Ok(()),
-            (4 | 6 | 9 | 11, 1..=30, _) => Ok(()),
-            (2, 1..=29, true) => Ok(()),
-            (2, 1..=28, false) => Ok(()),
+            (1 | 3 | 5 | 7 | 8 | 10 | 12, 1..=31, _)
+            | (4 | 6 | 9 | 11, 1..=30, _)
+            | (2, 1..=29, true)
+            | (2, 1..=28, false) => Ok(()),
             _ => Err(YmdError::InvalidNumber(ValidationError::DayDoesNotExist(
                 Month::from_u32(self.month).unwrap(),
+                if self.month == 2 {
+                    Some(self.year)
+                } else {
+                    None
+                },
             ))),
         }
     }
@@ -128,7 +135,7 @@ impl Ymd {
         Ok(())
     }
 
-    fn handle_empty_year(&mut self) -> Result<(), YmdError> {
+    fn handle_missing_year(&mut self) -> Result<(), YmdError> {
         let today = Local::today();
         let current_month = today.month();
         let current_day = today.day();
@@ -139,14 +146,14 @@ impl Ymd {
             self.month == current_month,
             self.day < current_day,
         ) {
-            (true, _, _) => self.year += 1,
-            (false, true, true) => self.year += 1,
+            (true, _, _) | (false, true, true) => self.year += 1,
             _ => {}
         }
 
         if let (true, false, true) = (self.month == 2, is_leap_year(self.year), self.day == 29) {
             return Err(YmdError::InvalidNumber(ValidationError::DayDoesNotExist(
                 Month::February,
+                Some(self.year),
             )));
         }
 
@@ -155,7 +162,7 @@ impl Ymd {
 }
 
 impl From<Ymd> for NaiveDate {
-    fn from(ymd: Ymd) -> Self {
+    fn from(ymd: Ymd) -> NaiveDate {
         NaiveDate::from_ymd(ymd.year, ymd.month, ymd.day)
     }
 }
@@ -169,19 +176,16 @@ pub fn count_days(date: NaiveDate) -> Duration {
 }
 
 pub fn print_days_diff(days_diff: Duration, date: NaiveDate) {
-    if days_diff > Duration::zero() {
-        println!(
-            "{} days left until {}, {}.",
-            days_diff.num_days(),
-            date,
-            date.weekday()
-        );
+    let message = if days_diff > Duration::zero() {
+        "days left until"
     } else {
-        println!(
-            "{} days has passed since {}, {}.",
-            -days_diff.num_days(),
-            date,
-            date.weekday()
-        );
-    }
+        "days has passed since"
+    };
+    println!(
+        "{} {} {}, {}.",
+        days_diff.num_days(),
+        message,
+        date,
+        date.weekday()
+    );
 }
