@@ -7,7 +7,7 @@ fn main() {
 
     if args.len() != 1 {
         eprintln!(
-            "Wrong number of inputs; expected 1, but given {}.\nUSAGE: cargo run mm/dd/yyyy // you can optionally omit year input",
+            "InputError: Wrong number of inputs; expected 1, but given {}.\nUSAGE: cargo run mm/dd/yyyy // you can optionally omit year input",
             args.len()
         );
         std::process::exit(1);
